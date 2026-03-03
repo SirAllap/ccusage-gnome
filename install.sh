@@ -4,7 +4,7 @@
 # =============================================================================
 set -euo pipefail
 
-EXTENSION_UUID="claude-code-usage@SirAllap.github.io"
+EXTENSION_UUID="ccusage-gnome@SirAllap.github.io"
 EXTENSION_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$EXTENSION_UUID"
 
 EXTENSION_DEST="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
