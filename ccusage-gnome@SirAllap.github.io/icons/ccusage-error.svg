@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- background -->
+  <rect width="128" height="128" rx="22" fill="#1e1e2e"/>
+  <!-- red circle track -->
+  <circle cx="64" cy="64" r="42" fill="none" stroke="#f38ba8" stroke-width="12"/>
+  <!-- X mark -->
+  <line x1="44" y1="44" x2="84" y2="84" stroke="#f38ba8" stroke-width="10" stroke-linecap="round"/>
+  <line x1="84" y1="44" x2="44" y2="84" stroke="#f38ba8" stroke-width="10" stroke-linecap="round"/>
+</svg>

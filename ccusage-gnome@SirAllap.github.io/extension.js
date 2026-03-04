@@ -48,6 +48,7 @@ export default class CcusageGnomeExtension extends Extension {
         FETCH_SCRIPT = `${this.path}/fetch.py`;
         this._timer     = null;
         this._pollTimer = null;
+        this._spinTimer = null;
 
         this._indicator = new PanelMenu.Button(0.5, 'ccusage-gnome', false);
 
@@ -58,6 +59,8 @@ export default class CcusageGnomeExtension extends Extension {
             y_align: Clutter.ActorAlign.CENTER,
             style: 'margin: 0 2px 0 4px;',
         });
+        this._icon.set_pivot_point(0.5, 0.5);
+        this._iconState = null;
 
         this._label = new St.Label({
             y_align: Clutter.ActorAlign.CENTER,
@@ -89,10 +92,12 @@ export default class CcusageGnomeExtension extends Extension {
     }
 
     disable() {
-        [this._timer, this._pollTimer].forEach(t => { if (t) GLib.source_remove(t); });
-        this._timer = this._pollTimer = null;
+        [this._timer, this._pollTimer, this._spinTimer].forEach(t => { if (t) GLib.source_remove(t); });
+        this._timer = this._pollTimer = this._spinTimer = null;
+        this._icon?.remove_all_transitions();
         this._indicator?.destroy();
         this._indicator = this._icon = this._label = this._detailsLabel = this._footerLabel = null;
+        this._iconState = null;
     }
 
     // =========================================================================
@@ -185,6 +190,29 @@ export default class CcusageGnomeExtension extends Extension {
         if (!pid || pid <= 0) return false;
         // On Linux, /proc/<pid> exists iff the process is alive
         return Gio.File.new_for_path(`/proc/${pid}`).query_exists(null);
+    }
+
+    _setIconState(state) {
+        if (this._iconState === state) return;
+        this._iconState = state;
+
+        if (this._spinTimer) { GLib.source_remove(this._spinTimer); this._spinTimer = null; }
+        this._icon.remove_all_transitions();
+        this._icon.rotation_angle_z = 0;
+
+        const names = { normal: 'ccusage.svg', loading: 'ccusage-fetch.svg', error: 'ccusage-error.svg' };
+        this._icon.gicon = Gio.icon_new_for_string(`${this.path}/icons/${names[state]}`);
+
+        if (state === 'loading') {
+            this._spinTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+                if (!this._icon || this._iconState !== 'loading') {
+                    this._spinTimer = null;
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._icon.rotation_angle_z = (this._icon.rotation_angle_z + 10) % 360;
+                return GLib.SOURCE_CONTINUE;
+            });
+        }
     }
 
     // fetch.py is a Python helper because GJS has no PTY API. The CLI's
@@ -363,6 +391,10 @@ export default class CcusageGnomeExtension extends Extension {
         );
     }
 
+    _esc(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     _fmt(n) {
         if (!n || n < 1000) return String(n || 0);
         if (n < 1e6)  return `${(n / 1000).toFixed(1)}K`;
@@ -396,6 +428,7 @@ export default class CcusageGnomeExtension extends Extension {
 
     _render(data, fetching) {
         if (!data) {
+            this._setIconState(fetching ? 'loading' : 'error');
             this._label.clutter_text.set_markup(
                 `<span foreground="${C.dim}">${fetching ? 'CC…' : 'CC·'}</span>`
             );
@@ -405,6 +438,7 @@ export default class CcusageGnomeExtension extends Extension {
             this._footerLabel.clutter_text.set_markup(`<span foreground="${C.dim}">—</span>`);
             return;
         }
+        this._setIconState('normal');
 
         const { session, week, weekSonnet: sonnet, extra } = data;
 
@@ -440,7 +474,7 @@ export default class CcusageGnomeExtension extends Extension {
             if (!s) continue;
             const pct   = s.percent ?? 0;
             const color = this._pctColor(pct);
-            const reset = s.resetTime ? s.resetTime.replace(/\s*\([^)]*\)/, '').trim() : '';
+            const reset = s.resetTime ? this._esc(s.resetTime.replace(/\s*\([^)]*\)/, '').trim()) : '';
 
             lines.push(`<span foreground="${C.purple}">${label}</span>`);
             lines.push(`  [${this._bar(pct)}] <span foreground="${color}">${pct}%</span>`);
@@ -508,7 +542,7 @@ export default class CcusageGnomeExtension extends Extension {
             const toolParts = Object.entries(tools)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 5)
-                .map(([name, count]) => `${name} ${count}`);
+                .map(([name, count]) => `${this._esc(name)} ${count}`);
             if (toolParts.length > 0)
                 lines.push(`  <span foreground="${C.dim}">${toolParts.join(' · ')}</span>`);
 
