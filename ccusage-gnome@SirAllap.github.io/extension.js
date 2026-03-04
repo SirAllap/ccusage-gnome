@@ -7,9 +7,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-const CACHE_FILE   = '/tmp/claude_usage.json';
-const TOKEN_CACHE  = '/tmp/claude_tokens.json';
-const LOCK_FILE    = '/tmp/claude_fetch.lock';
+const CACHE_FILE   = '/tmp/ccusage_usage.json';
+const TOKEN_CACHE  = '/tmp/ccusage_tokens.json';
+const LOCK_FILE    = '/tmp/ccusage_fetch.lock';
 // Set at runtime from this.path so the extension is fully self-contained
 let FETCH_SCRIPT = '';
 
@@ -38,7 +38,7 @@ const MODEL_PRICING = {
     'claude-haiku-4-5-20251001': [ 0.80,  4.0, 0.08,   1.00],
 };
 
-export default class ClaudeCodeUsageExtension extends Extension {
+export default class CcusageGnomeExtension extends Extension {
 
     // =========================================================================
     // Lifecycle
@@ -49,9 +49,9 @@ export default class ClaudeCodeUsageExtension extends Extension {
         this._timer     = null;
         this._pollTimer = null;
 
-        this._indicator = new PanelMenu.Button(0.0, 'Claude Code Usage', false);
+        this._indicator = new PanelMenu.Button(0.5, 'ccusage-gnome', false);
 
-        const gicon = Gio.icon_new_for_string(`${this.path}/icons/claude-color.png`);
+        const gicon = Gio.icon_new_for_string(`${this.path}/icons/ccusage.svg`);
         this._icon = new St.Icon({
             gicon,
             icon_size: 16,
@@ -106,7 +106,7 @@ export default class ClaudeCodeUsageExtension extends Extension {
         const hdrItem = new PopupMenu.PopupBaseMenuItem({ reactive: false, can_focus: false });
         const hdrLabel = new St.Label({ style: 'font-size: 13px; font-weight: bold;' });
         hdrLabel.clutter_text.use_markup = true;
-        hdrLabel.clutter_text.set_markup(`<span foreground="${C.purple}"><b>Claude Code Usage</b></span>`);
+        hdrLabel.clutter_text.set_markup(`<span foreground="${C.purple}"><b>CC Usage</b></span>`);
         hdrItem.add_child(hdrLabel);
         menu.addMenuItem(hdrItem);
 
@@ -187,6 +187,9 @@ export default class ClaudeCodeUsageExtension extends Extension {
         return Gio.File.new_for_path(`/proc/${pid}`).query_exists(null);
     }
 
+    // fetch.py is a Python helper because GJS has no PTY API. The CLI's
+    // /usage command requires an interactive pseudo-terminal session to produce
+    // output — something that cannot be done from GJS directly.
     _spawnFetch() {
         try {
             Gio.Subprocess.new(
@@ -194,7 +197,7 @@ export default class ClaudeCodeUsageExtension extends Extension {
                 Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE
             );
         } catch (e) {
-            console.error(`[claude-code-usage] spawn fetch: ${e}`);
+            console.error(`[ccusage-gnome] spawn fetch: ${e}`);
         }
     }
 

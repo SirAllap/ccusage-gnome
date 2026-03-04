@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Claude Code Usage Background Fetcher
+ccusage-gnome Background Fetcher
 
-Spawns claude in a PTY, sends /usage, parses the TUI output,
-and writes structured JSON to /tmp/claude_usage.json.
+Spawns the CLI in a PTY, sends /usage, parses the TUI output,
+and writes structured JSON to /tmp/ccusage_usage.json.
 
 Polls cleaned output until usage data appears, then exits —
 typically ~6-8 seconds instead of a fixed sleep.
@@ -24,11 +24,11 @@ from datetime import datetime
 from pathlib import Path
 
 
-CACHE_FILE    = Path("/tmp/claude_usage.json")
-LOCK_FILE     = Path("/tmp/claude_fetch.lock")
-TOKEN_CACHE   = Path("/tmp/claude_tokens.json")
+CACHE_FILE    = Path("/tmp/ccusage_usage.json")
+LOCK_FILE     = Path("/tmp/ccusage_fetch.lock")
+TOKEN_CACHE   = Path("/tmp/ccusage_tokens.json")
 PROJECTS_DIR  = Path.home() / ".claude" / "projects"
-CLAUDE_PATH   = Path.home() / ".local/bin/claude"
+CLI_PATH      = Path.home() / ".local/bin/claude"
 EXIT_WAIT     = 0.8   # seconds to wait after /exit before killing
 TOKEN_TTL     = 120   # seconds before recomputing token stats
 
@@ -113,8 +113,8 @@ def parse_usage(text: str) -> dict:
 # =============================================================================
 
 def fetch_via_pty() -> dict:
-    if not CLAUDE_PATH.exists():
-        raise FileNotFoundError(f"Claude not found at {CLAUDE_PATH}")
+    if not CLI_PATH.exists():
+        raise FileNotFoundError(f"CLI not found at {CLI_PATH}")
 
     chunks: list[str] = []
     lock = threading.Lock()
@@ -124,12 +124,12 @@ def fetch_via_pty() -> dict:
     env = dict(os.environ)
     env.update({"NO_COLOR": "1", "FORCE_COLOR": "0",
                 "TERM": "xterm-256color", "COLUMNS": "120", "LINES": "80"})
-    # Prevent "nested session" error if run inside Claude Code
+    # Prevent "nested session" error when running inside an active session
     for var in ("CLAUDECODE", "CLAUDE_SESSION_ID", "ANTHROPIC_CLAUDE_CODE"):
         env.pop(var, None)
 
     proc = subprocess.Popen(
-        [str(CLAUDE_PATH), "--dangerously-skip-permissions"],
+        [str(CLI_PATH), "--dangerously-skip-permissions"],
         stdin=slave, stdout=slave, stderr=slave,
         close_fds=True, cwd="/tmp", env=env,
     )
@@ -168,7 +168,7 @@ def fetch_via_pty() -> dict:
         return False
 
     try:
-        # Wait for the prompt — "bypass permissions on" signals Claude is ready
+        # Wait for the prompt — "bypass permissions on" signals the CLI is ready
         _wait_for(r"bypass permissions", timeout=8.0)
         time.sleep(0.1)
 
@@ -221,7 +221,7 @@ def save_cache(data: dict) -> None:
 # =============================================================================
 
 def compute_today_tokens() -> None:
-    """Scan today's JSONL session files and write /tmp/claude_tokens.json."""
+    """Scan today's JSONL session files and write /tmp/ccusage_tokens.json."""
     try:
         cache = json.loads(TOKEN_CACHE.read_text())
         if time.time() - cache.get("timestamp", 0) < TOKEN_TTL:
@@ -343,7 +343,7 @@ def main() -> None:
                 save_cache(old)
         compute_today_tokens()
     except Exception as e:
-        print(f"[claude-fetch] {e}", file=sys.stderr)
+        print(f"[ccusage-fetch] {e}", file=sys.stderr)
         old = load_cache()
         if old:
             old["fromCache"] = True

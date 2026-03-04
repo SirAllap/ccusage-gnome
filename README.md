@@ -1,6 +1,6 @@
 # ccusage-gnome
 
-A GNOME Shell extension that shows your **Claude Code API usage** directly in the top bar — session %, time to reset, weekly budget tracking, and today's full token analytics — all without leaving your desktop.
+A GNOME Shell extension that shows your **CC API usage** directly in the top bar — session %, time to reset, weekly budget tracking, and today's full token analytics — all without leaving your desktop.
 
 ---
 
@@ -12,7 +12,7 @@ A GNOME Shell extension that shows your **Claude Code API usage** directly in th
 - **Extra spend tracking** — pay-as-you-go tier shown if applicable
 - **Background refresh** — data fetched automatically, never blocking your workflow
 - **Force refresh** — one click to clear cache and fetch fresh data immediately
-- **No external services** — reads directly from the Claude CLI; no API keys required beyond your existing Claude Code login
+- **No external services** — reads directly from the CLI; no API keys required beyond your existing CC login
 
 ---
 
@@ -22,23 +22,23 @@ A GNOME Shell extension that shows your **Claude Code API usage** directly in th
 ┌──────────────────────────────────────────────────┐
 │  GNOME Shell Extension (extension.js)            │
 │  • Renders top bar label + dropdown              │
-│  • Reads /tmp/claude_usage.json every 30s        │
-│  • Reads /tmp/claude_tokens.json for token stats │
+│  • Reads /tmp/ccusage_usage.json every 30s        │
+│  • Reads /tmp/ccusage_tokens.json for token stats │
 │  • Spawns fetch.py when cache is stale (>90s)    │
 └──────────────────┬───────────────────────────────┘
                    │ spawns
                    ▼
 ┌──────────────────────────────────────────────────┐
 │  fetch.py (Python — bundled with extension)      │
-│  • Opens a PTY and launches claude CLI           │
+│  • Opens a PTY and launches the CLI              │
 │  • Sends /usage, parses TUI output               │
-│  • Writes /tmp/claude_usage.json                 │
-│  • Scans ~/.claude/projects/**/*.jsonl           │
-│  • Writes /tmp/claude_tokens.json                │
+│  • Writes /tmp/ccusage_usage.json                 │
+│  • Scans ~/.claude/projects/**/*.jsonl            │
+│  • Writes /tmp/ccusage_tokens.json                │
 └──────────────────────────────────────────────────┘
 ```
 
-> **Why a Python script?** GJS (GNOME's JS engine) cannot open a PTY or run interactive terminal sessions. `fetch.py` handles this by spawning the Claude CLI in a pseudo-terminal and scraping its `/usage` output.
+> **Why a Python script?** GJS (GNOME's JS engine) cannot open a PTY or run interactive terminal sessions. `fetch.py` handles this by spawning the CLI in a pseudo-terminal and scraping its `/usage` output.
 
 ---
 
@@ -48,13 +48,13 @@ A GNOME Shell extension that shows your **Claude Code API usage** directly in th
 |---|---|---|
 | GNOME Shell | 45+ | Ubuntu 23.10+, Fedora 39+ |
 | Python | 3.9+ | Standard library only, no extra packages needed |
-| Claude CLI | any | Installed via Claude Code setup |
+| CLI | any | Installed via CC setup |
 
-### Install Claude CLI
+### Install the CLI
 
 Follow the official guide: https://docs.anthropic.com/claude-code
 
-The extension expects the Claude binary at `~/.local/bin/claude`.
+The extension expects the CLI binary at `~/.local/bin/claude`.
 
 ---
 
@@ -139,18 +139,18 @@ ccusage-gnome/
 ├── uninstall.sh                            ← automated uninstaller
 └── ccusage-gnome@SirAllap.github.io/      ← self-contained extension bundle
     ├── extension.js                        ← panel indicator + dropdown UI
-    ├── fetch.py                            ← Claude CLI PTY fetcher + token analytics
+    ├── fetch.py                            ← CLI PTY fetcher + token analytics
     ├── metadata.json                       ← extension manifest
     └── icons/
-        └── claude-color.png
+        └── ccusage.svg
 ```
 
 **Runtime files (created automatically):**
 
 ```
-/tmp/claude_usage.json      ← usage data cache (auto-cleared on reboot)
-/tmp/claude_fetch.lock      ← fetch process lock
-/tmp/claude_tokens.json     ← token analytics cache (auto-cleared on reboot)
+/tmp/ccusage_usage.json      ← usage data cache (auto-cleared on reboot)
+/tmp/ccusage_fetch.lock      ← fetch process lock
+/tmp/ccusage_tokens.json     ← token analytics cache (auto-cleared on reboot)
 ```
 
 ---
@@ -175,15 +175,15 @@ journalctl -f -o cat /usr/bin/gnome-shell | grep -i ccusage
 
 ```bash
 python3 ccusage-gnome@SirAllap.github.io/fetch.py
-cat /tmp/claude_usage.json
-cat /tmp/claude_tokens.json
+cat /tmp/ccusage_usage.json
+cat /tmp/ccusage_tokens.json
 ```
 
 ### Build release zip
 
 ```bash
 cd ccusage-gnome@SirAllap.github.io
-zip -r ../ccusage-gnome.zip extension.js metadata.json fetch.py icons/claude-color.png
+zip -r ../ccusage-gnome.zip extension.js metadata.json fetch.py icons/ccusage.svg
 ```
 
 ---
@@ -199,14 +199,14 @@ journalctl -b -o cat /usr/bin/gnome-shell | grep -i "ccusage\|Extension error"
 
 ### Label shows "CC·" (no data)
 
-Cache is empty. Click the indicator and use **↺ Force Refresh**. First fetch takes ~20 seconds as it launches a full Claude CLI session.
+Cache is empty. Click the indicator and use **↺ Force Refresh**. First fetch takes ~20 seconds as it launches a full CLI session.
 
 ### Reset time or countdown looks wrong
 
-The extension uses `GLib.TimeZone` to correctly parse the timezone in the reset string (e.g. `Europe/Madrid`). If the countdown still looks off, check your Claude CLI output:
+The extension uses `GLib.TimeZone` to correctly parse the timezone in the reset string (e.g. `Europe/Madrid`). If the countdown still looks off, check the CLI output:
 
 ```bash
-cat /tmp/claude_usage.json | python3 -m json.tool
+cat /tmp/ccusage_usage.json | python3 -m json.tool
 ```
 
 ---
@@ -217,7 +217,7 @@ cat /tmp/claude_usage.json | python3 -m json.tool
 |---|---|
 | GNOME Shell | 46 (Ubuntu 24.04) |
 | Python | 3.12, 3.14 |
-| Claude CLI | 2.x |
+| CLI | 2.x |
 | Session type | Wayland, X11 |
 
 ---

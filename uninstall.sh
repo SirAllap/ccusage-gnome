@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Claude Code Usage — Uninstaller
+# ccusage-gnome — Uninstaller
 # =============================================================================
 set -euo pipefail
 
@@ -17,7 +17,7 @@ info()    { echo -e "${CYAN}  →${RESET} $*"; }
 success() { echo -e "${GREEN}  ✓${RESET} $*"; }
 warn()    { echo -e "${YELLOW}  !${RESET} $*"; }
 
-echo -e "${BOLD}Uninstalling Claude Code Usage…${RESET}"
+echo -e "${BOLD}Uninstalling ccusage-gnome…${RESET}"
 echo ""
 
 # Disable and uninstall extension
@@ -34,9 +34,9 @@ if [ -d "$EXTENSION_DEST" ]; then
 fi
 
 # Remove temp / cache files
-rm -f /tmp/claude_usage.json \
-       /tmp/claude_fetch.lock \
-       /tmp/claude_tokens.json
+rm -f /tmp/ccusage_usage.json \
+       /tmp/ccusage_fetch.lock \
+       /tmp/ccusage_tokens.json
 success "Removed cache files from /tmp"
 
 echo ""

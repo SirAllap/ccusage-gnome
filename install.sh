@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Claude Code Usage — Installer
+# ccusage-gnome — Installer
 # =============================================================================
 set -euo pipefail
 
@@ -62,15 +62,15 @@ if [ -z "$PYTHON" ]; then
 fi
 success "Python $PY_VER ($PYTHON)"
 
-# Claude CLI
-CLAUDE_BIN="$HOME/.local/bin/claude"
-if [ ! -x "$CLAUDE_BIN" ] && ! command -v claude &>/dev/null; then
-    warn "Claude CLI not found at $CLAUDE_BIN."
-    warn "fetch.py expects the Claude CLI at ~/.local/bin/claude."
-    warn "Install Claude Code first: https://docs.anthropic.com/claude-code"
-    warn "Continuing installation — you can install Claude CLI separately."
+# CLI binary
+CLI_BIN="$HOME/.local/bin/claude"
+if [ ! -x "$CLI_BIN" ] && ! command -v claude &>/dev/null; then
+    warn "CLI not found at $CLI_BIN."
+    warn "fetch.py expects the CLI at ~/.local/bin/claude."
+    warn "Install it first: https://docs.anthropic.com/claude-code"
+    warn "Continuing installation — you can install it separately."
 else
-    success "Claude CLI found"
+    success "CLI found"
 fi
 
 # =============================================================================
@@ -82,7 +82,7 @@ mkdir -p "$EXTENSION_DEST/icons"
 cp "$EXTENSION_SRC/extension.js"           "$EXTENSION_DEST/extension.js"
 cp "$EXTENSION_SRC/metadata.json"          "$EXTENSION_DEST/metadata.json"
 cp "$EXTENSION_SRC/fetch.py"               "$EXTENSION_DEST/fetch.py"
-cp "$EXTENSION_SRC/icons/claude-color.png" "$EXTENSION_DEST/icons/claude-color.png"
+cp "$EXTENSION_SRC/icons/ccusage.svg"      "$EXTENSION_DEST/icons/ccusage.svg"
 success "Extension files installed to $EXTENSION_DEST"
 
 # =============================================================================
@@ -120,4 +120,4 @@ echo -e "${BOLD}To reload the extension after future updates:${RESET}"
 echo "  bash install.sh"
 echo ""
 echo -e "${BOLD}To check for errors:${RESET}"
-echo "  journalctl -f -o cat /usr/bin/gnome-shell | grep -i claude"
+echo "  journalctl -f -o cat /usr/bin/gnome-shell | grep -i ccusage"

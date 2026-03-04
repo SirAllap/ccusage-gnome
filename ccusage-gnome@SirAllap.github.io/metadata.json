@@ -1,7 +1,7 @@
 {
   "uuid": "ccusage-gnome@SirAllap.github.io",
-  "name": "Claude Code Usage",
-  "description": "Shows Claude Code session usage in the top bar. Displays 5h window consumed %, time remaining, and weekly budget tracking. Detailed breakdown available on click.",
+  "name": "CC Usage",
+  "description": "Shows CC session usage in the top bar. Displays 5h window consumed %, time remaining, and weekly budget tracking. Detailed breakdown available on click.",
   "url": "https://github.com/SirAllap/ccusage-gnome",
   "shell-version": ["45", "46", "47", "48"],
   "session-modes": ["user"],
