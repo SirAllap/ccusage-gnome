@@ -10,6 +10,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 const CACHE_FILE   = '/tmp/ccusage_usage.json';
 const TOKEN_CACHE  = '/tmp/ccusage_tokens.json';
 const LOCK_FILE    = '/tmp/ccusage_fetch.lock';
+const LIVE_ICON    = '/tmp/ccusage_icon_live.svg';
 // Set at runtime from this.path so the extension is fully self-contained
 let FETCH_SCRIPT = '';
 
@@ -46,9 +47,12 @@ export default class CcusageGnomeExtension extends Extension {
 
     enable() {
         FETCH_SCRIPT = `${this.path}/fetch.py`;
-        this._timer     = null;
-        this._pollTimer = null;
-        this._spinTimer = null;
+        this._timer       = null;
+        this._pollTimer   = null;
+        this._spinTimer   = null;
+        this._menuStateId = 0;
+        // Cancels any in-flight async file IO when disable() runs
+        this._cancellable = new Gio.Cancellable();
 
         this._indicator = new PanelMenu.Button(0.5, 'ccusage-gnome', false);
 
@@ -77,7 +81,7 @@ export default class CcusageGnomeExtension extends Extension {
         this._buildMenu();
 
         // Refresh data every time the dropdown is opened
-        this._indicator.menu.connect('open-state-changed', (_menu, open) => {
+        this._menuStateId = this._indicator.menu.connect('open-state-changed', (_menu, open) => {
             if (open) this._update();
         });
 
@@ -92,11 +96,55 @@ export default class CcusageGnomeExtension extends Extension {
     }
 
     disable() {
-        [this._timer, this._pollTimer, this._spinTimer].forEach(t => { if (t) GLib.source_remove(t); });
-        this._timer = this._pollTimer = this._spinTimer = null;
-        this._icon?.remove_all_transitions();
-        this._indicator?.destroy();
-        this._indicator = this._icon = this._label = this._detailsLabel = this._footerLabel = null;
+        // Abort any in-flight async IO so completions don't touch torn-down UI
+        if (this._cancellable) {
+            this._cancellable.cancel();
+            this._cancellable = null;
+        }
+
+        // Remove main loop sources
+        if (this._timer) {
+            GLib.source_remove(this._timer);
+            this._timer = null;
+        }
+        if (this._pollTimer) {
+            GLib.source_remove(this._pollTimer);
+            this._pollTimer = null;
+        }
+        if (this._spinTimer) {
+            GLib.source_remove(this._spinTimer);
+            this._spinTimer = null;
+        }
+
+        // Disconnect signals
+        if (this._menuStateId && this._indicator?.menu) {
+            this._indicator.menu.disconnect(this._menuStateId);
+        }
+        this._menuStateId = 0;
+
+        // Destroy owned objects
+        if (this._icon) {
+            this._icon.remove_all_transitions();
+            this._icon.destroy();
+            this._icon = null;
+        }
+        if (this._label) {
+            this._label.destroy();
+            this._label = null;
+        }
+        if (this._detailsLabel) {
+            this._detailsLabel.destroy();
+            this._detailsLabel = null;
+        }
+        if (this._footerLabel) {
+            this._footerLabel.destroy();
+            this._footerLabel = null;
+        }
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
+
         this._iconState = null;
     }
 
@@ -151,25 +199,27 @@ export default class CcusageGnomeExtension extends Extension {
     }
 
     // =========================================================================
-    // Data helpers
+    // Data helpers (async file IO)
     // =========================================================================
 
-    _readFile(path) {
+    async _readFile(path) {
         try {
-            const [ok, bytes] = Gio.File.new_for_path(path).load_contents(null);
-            if (ok) return new TextDecoder().decode(bytes);
-        } catch (_) {}
-        return null;
+            const [bytes] = await Gio.File.new_for_path(path)
+                .load_contents_async(this._cancellable);
+            return new TextDecoder().decode(bytes);
+        } catch (_) {
+            return null;
+        }
     }
 
-    _loadCache() {
-        const txt = this._readFile(CACHE_FILE);
+    async _loadCache() {
+        const txt = await this._readFile(CACHE_FILE);
         if (!txt) return null;
         try { return JSON.parse(txt); } catch (_) { return null; }
     }
 
-    _loadTokenCache() {
-        const txt = this._readFile(TOKEN_CACHE);
+    async _loadTokenCache() {
+        const txt = await this._readFile(TOKEN_CACHE);
         if (!txt) return null;
         try {
             const d = JSON.parse(txt);
@@ -180,16 +230,56 @@ export default class CcusageGnomeExtension extends Extension {
 
     _isStale(data) {
         if (!data) return true;
-        return (Date.now() / 1000 - (data.timestamp ?? 0) / 1000) > CACHE_TTL;
+        const ttl = data.rateLimited ? 600 : CACHE_TTL;
+        return (Date.now() / 1000 - (data.timestamp ?? 0) / 1000) > ttl;
     }
 
-    _isFetchRunning() {
-        const txt = this._readFile(LOCK_FILE);
+    async _isFetchRunning() {
+        const txt = await this._readFile(LOCK_FILE);
         if (!txt) return false;
         const pid = parseInt(txt.trim(), 10);
         if (!pid || pid <= 0) return false;
         // On Linux, /proc/<pid> exists iff the process is alive
-        return Gio.File.new_for_path(`/proc/${pid}`).query_exists(null);
+        try {
+            await Gio.File.new_for_path(`/proc/${pid}`)
+                .query_info_async('standard::type', Gio.FileQueryInfoFlags.NONE,
+                                  GLib.PRIORITY_DEFAULT, this._cancellable);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    _writeLiveIcon(pct) {
+        const circ   = 31.416; // 2π × r=5
+        const filled = (pct / 100 * circ).toFixed(2);
+        const color  = this._pctColor(pct);
+        const svg =
+            `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">` +
+            `<circle cx="8" cy="8" r="5" fill="none" stroke="${C.dim}" stroke-width="2.5"/>` +
+            `<circle cx="8" cy="8" r="5" fill="none" stroke="${color}" stroke-width="2.5"` +
+            ` stroke-dasharray="${filled} ${circ}" stroke-linecap="round" transform="rotate(-90 8 8)"/>` +
+            `</svg>`;
+        this._replaceIconFile(svg).catch(e => {
+            if (!this._isCancelled(e))
+                console.error(`[ccusage-gnome] write live icon: ${e}`);
+        });
+    }
+
+    async _replaceIconFile(svg) {
+        const file  = Gio.File.new_for_path(LIVE_ICON);
+        const bytes = new GLib.Bytes(new TextEncoder().encode(svg));
+        await file.replace_contents_bytes_async(
+            bytes, null, false,
+            Gio.FileCreateFlags.REPLACE_DESTINATION, this._cancellable,
+        );
+        if (this._icon && this._iconState === 'normal')
+            this._icon.gicon = Gio.icon_new_for_string(LIVE_ICON);
+    }
+
+    _isCancelled(e) {
+        return e instanceof GLib.Error &&
+               e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED);
     }
 
     _setIconState(state) {
@@ -234,25 +324,51 @@ export default class CcusageGnomeExtension extends Extension {
     // =========================================================================
 
     _update() {
-        const data    = this._loadCache();
-        const active  = this._isFetchRunning();
+        this._updateAsync().catch(e => {
+            if (!this._isCancelled(e))
+                console.error(`[ccusage-gnome] update: ${e}`);
+        });
+    }
+
+    async _updateAsync() {
+        const [data, active] = await Promise.all([
+            this._loadCache(),
+            this._isFetchRunning(),
+        ]);
+        if (!this._indicator) return;
         const spawned = this._isStale(data) && !active;
         if (spawned) this._spawnFetch();
         if (active || spawned) this._startPolling();
-        this._render(data, active || spawned);
+        await this._render(data, active || spawned);
     }
 
+    // One-shot polling: each tick re-arms itself while fetch.py is running.
+    // Using a self-terminating SOURCE_CONTINUE loop with async work inside is
+    // racy, so we schedule one tick at a time.
     _startPolling() {
         if (this._pollTimer) return;
         this._pollTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, POLL_SECS, () => {
-            const fetching = this._isFetchRunning();
-            this._render(this._loadCache(), fetching);
-            if (!fetching) {
-                this._pollTimer = null;
-                return GLib.SOURCE_REMOVE;
-            }
-            return GLib.SOURCE_CONTINUE;
+            this._pollTimer = null;
+            this._pollTick();
+            return GLib.SOURCE_REMOVE;
         });
+    }
+
+    _pollTick() {
+        this._pollTickAsync().catch(e => {
+            if (!this._isCancelled(e))
+                console.error(`[ccusage-gnome] poll: ${e}`);
+        });
+    }
+
+    async _pollTickAsync() {
+        const [data, fetching] = await Promise.all([
+            this._loadCache(),
+            this._isFetchRunning(),
+        ]);
+        if (!this._indicator) return;
+        await this._render(data, fetching);
+        if (fetching) this._startPolling();
     }
 
     // =========================================================================
@@ -426,7 +542,9 @@ export default class CcusageGnomeExtension extends Extension {
     // Full render
     // =========================================================================
 
-    _render(data, fetching) {
+    async _render(data, fetching) {
+        if (!this._label || !this._detailsLabel || !this._footerLabel) return;
+
         if (!data) {
             this._setIconState(fetching ? 'loading' : 'error');
             this._label.clutter_text.set_markup(
@@ -447,6 +565,7 @@ export default class CcusageGnomeExtension extends Extension {
         // countdown = time remaining until session resets
         // mini bar  = weekly all-models budget (7 blocks)
         const sPct      = session?.percent ?? 0;
+        this._writeLiveIcon(sPct);
         const sessMs    = this._parseResetMs(session?.resetTime);
         const countdown = sessMs !== null
             ? ` <span foreground="${C.dim}">↺${this._formatCountdown(sessMs)}</span>`
@@ -510,7 +629,8 @@ export default class CcusageGnomeExtension extends Extension {
         }
 
         // Today's token stats (populated by fetch.py on each refresh)
-        const tokens = this._loadTokenCache();
+        const tokens = await this._loadTokenCache();
+        if (!this._detailsLabel || !this._footerLabel) return;
         if (tokens?.message_count > 0) {
             lines.push(sep);
             const totalMsgs = (tokens.message_count || 0) + (tokens.user_msg_count || 0);
@@ -586,9 +706,10 @@ export default class CcusageGnomeExtension extends Extension {
         // Footer
         const age    = Math.round(Date.now() / 1000 - (data.timestamp ?? 0) / 1000);
         const cached = data.fromCache ? ' (cached)' : '';
+        const rl     = data.rateLimited ? ` · <span foreground="${C.yellow}">Anthropic API error</span>` : '';
         const status = fetching ? 'fetching…' : `updated ${age}s ago${cached}`;
         this._footerLabel.clutter_text.set_markup(
-            `<span foreground="${C.dim}">${status}</span>`
+            `<span foreground="${C.dim}">${status}</span>${rl}`
         );
     }
 
@@ -597,12 +718,25 @@ export default class CcusageGnomeExtension extends Extension {
     // =========================================================================
 
     _onRefresh() {
-        try { Gio.File.new_for_path(CACHE_FILE).delete(null); } catch (_) {}
-        try { Gio.File.new_for_path(TOKEN_CACHE).delete(null); } catch (_) {}
-        if (!this._isFetchRunning()) {
+        this._onRefreshAsync().catch(e => {
+            if (!this._isCancelled(e))
+                console.error(`[ccusage-gnome] refresh: ${e}`);
+        });
+    }
+
+    async _onRefreshAsync() {
+        for (const path of [CACHE_FILE, TOKEN_CACHE]) {
+            try {
+                await Gio.File.new_for_path(path)
+                    .delete_async(GLib.PRIORITY_DEFAULT, this._cancellable);
+            } catch (_) { /* missing file is fine */ }
+        }
+        if (!this._indicator) return;
+        if (!(await this._isFetchRunning())) {
             this._spawnFetch();
             this._startPolling();
         }
-        this._render(null, true);
+        if (!this._indicator) return;
+        await this._render(null, true);
     }
 }
