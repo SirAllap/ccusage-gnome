@@ -105,6 +105,8 @@ def parse_usage(text: str) -> dict:
     if result["extra"] and spend_match:
         result["extra"]["spent"] = float(spend_match.group(1))
         result["extra"]["limit"] = float(spend_match.group(2))
+    if re.search(r'rate.limit|Failed to load usage', text, re.IGNORECASE):
+        result["rateLimited"] = True
     return result
 
 
@@ -340,7 +342,12 @@ def main() -> None:
             old = load_cache()
             if old:
                 old["fromCache"] = True
+                if data.get("rateLimited"):
+                    old["rateLimited"] = True
+                    old["timestamp"] = int(time.time() * 1000)  # refresh to avoid immediate retry
                 save_cache(old)
+            elif data.get("rateLimited"):
+                save_cache(data)
         compute_today_tokens()
     except Exception as e:
         print(f"[ccusage-fetch] {e}", file=sys.stderr)

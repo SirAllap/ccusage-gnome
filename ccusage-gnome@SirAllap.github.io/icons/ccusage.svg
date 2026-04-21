@@ -1,49 +1,7 @@
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 128 128"
-  width="128"
-  height="128"
->
-  <!-- background -->
-  <rect
-    width="128"
-    height="128"
-    rx="22"
-    fill="#1e1e2e"
-  />
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
   <!-- donut track -->
-  <circle
-    cx="64"
-    cy="64"
-    r="42"
-    fill="none"
-    stroke="#313244"
-    stroke-width="12"
-  />
-
-  <!-- donut fill (~65%, clockwise from top) -->
-  <circle
-    cx="64"
-    cy="64"
-    r="42"
-    fill="none"
-    stroke="#cba6f7"
-    stroke-width="12"
-    stroke-dasharray="171 263"
-    stroke-dashoffset="66"
-    stroke-linecap="round"
-    transform="rotate(-90 64 64)"
-  />
-
-  <!-- centered label -->
-  <text
-    x="64"
-    y="72"
-    text-anchor="middle"
-    font-family="sans-serif"
-    font-size="26"
-    font-weight="bold"
-    fill="#cdd6f4"
-  >CC</text>
+  <circle cx="8" cy="8" r="5" fill="none" stroke="#6c7086" stroke-width="2.5"/>
+  <!-- donut fill ~65% -->
+  <circle cx="8" cy="8" r="5" fill="none" stroke="#cba6f7" stroke-width="2.5"
+    stroke-dasharray="20.4 11" stroke-linecap="round" transform="rotate(-90 8 8)"/>
 </svg>
